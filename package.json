@@ -1,0 +1,20 @@
+{
+  "name": "corestorage",
+  "version": "0.0.0",
+  "description": "storage, opening, and closing of a set of hypercores",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "hypercore",
+    "multifeed",
+    "core",
+    "storage",
+    "p2p",
+    "dat",
+    "kappa"
+  ],
+  "author": "noffle",
+  "license": "ISC"
+}
