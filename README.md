@@ -88,6 +88,11 @@ name string. `opts` are passed along to the hypercore constructor.
 If this feed is already open, you will get the opened instance, which may have
 been created with different hypercore options than the `opts` you specify.
 
+# store.has(key, cb)
+
+Determine whether the store has a feed with `key` as `cb(err, hasFeed)` for a
+boolean `hasFeed`.
+
 # store.isOpen(key)
 
 Return a boolean: whether the feed identified by `key` is open or not.
