@@ -19,7 +19,7 @@ function Storage (storage, opts) {
   this._feeds = {} // map hypercore keys to feeds
   this._dkeys = {} // map discovery key to key for loaded feeds
   this._lnames = {} // map local names to key for loaded feeds
-  this._delete = opts.delete
+  this._delete = opts.delete || noop
 }
 
 Storage.prototype._storageF = function (prefix) {
@@ -31,13 +31,16 @@ Storage.prototype._storageF = function (prefix) {
 
 // Map a discovery key to a public key.
 Storage.prototype.fromDiscoveryKey = function (dkey, cb) {
+  var self = this
   var hdkey = asHexStr(dkey)
-  if (this._dkeys.hasOwnProperty(hdkey)) {
-    return nextTick(cb, null, this._dkeys[hdkey])
+  if (self._dkeys.hasOwnProperty(hdkey)) {
+    return nextTick(cb, null, self._dkeys[hdkey])
   }
-  this._db.get(DKEY + hdkey, function (err, node) {
-    if (err) cb(err)
-    else cb(null, node === null ? null : node.value)
+  self._db.get(DKEY + hdkey, function (err, node) {
+    if (err) return cb(err)
+    if (!node) return cb(null, null)
+    self._dkeys[hdkey] = node.value
+    cb(null, node.value)
   })
 }
 
@@ -191,7 +194,7 @@ Storage.prototype.get = function (id, opts) {
           cb(null, self._storageF(FEED + hkey))
         } else {
           // does not exist
-          cb(null, new Error('feed not found'))
+          cb(new Error('feed not found'))
         }
       })
     }), opts)
@@ -212,13 +215,13 @@ Storage.prototype.has = function (key, cb) {
 }
 
 // Returns boolean true/false if core is open.
-Storage.prototype.isOpen = function (id, cb) {
-  return this._feeds.hasOwnProperty(asHexStr(id))
+Storage.prototype.isOpen = function (key, cb) {
+  return this._feeds.hasOwnProperty(asHexStr(key))
 }
 
 // Unload a hypercore.
-Storage.prototype.close = function (id, cb) {
-  var hkey = asHexStr(id)
+Storage.prototype.close = function (key, cb) {
+  var hkey = asHexStr(key)
   if (!this._feeds.hasOwnProperty(hkey)) {
     return nextTick(cb, new Error('feed not loaded'))
   }
@@ -249,15 +252,25 @@ Storage.prototype.closeAll = function (cb) {
 }
 
 // Unload (if necessary) and delete a hypercore.
-Storage.prototype.delete = function (id, cb) {
+Storage.prototype.delete = function (key, cb) {
   var self = this
-  var hkey = asHexStr(id)
+  var hkey = asHexStr(key)
   if (self._feeds.hasOwnProperty(hkey)) {
     self._feeds[hkey].close(function (err) {
       if (err) return cb(err)
       self._delete(FEED + hkey, cb)
     })
   }
+  var feed = self._feeds[hkey]
+  if (feed) {
+    delete self._dkeys[asHexStr(feed.discoveryKey)]
+  }
+  var bkey = asBuffer(key)
+  Object.keys(self._lnames).forEach(function (key) {
+    if (self._lnames[key].equals(bkey)) {
+      delete self._lnames[key]
+    }
+  })
   delete self._feeds[hkey]
 }
 

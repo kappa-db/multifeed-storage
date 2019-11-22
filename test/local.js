@@ -37,7 +37,7 @@ test('create local with name', function (t) {
 
 test('create local and get', function (t) {
   t.plan(4)
-  var dir = path.join(tmpdir(), String(randomBytes(8).toString('hex')))
+  var dir = path.join(tmpdir(), randomBytes(8).toString('hex'))
   mkdirp.sync(dir)
   var s = Storage(function (name) {
     return raf(path.join(dir, name))
@@ -60,7 +60,7 @@ test('create local and get', function (t) {
 
 test('create local and get from name', function (t) {
   t.plan(6)
-  var dir = path.join(tmpdir(), String(randomBytes(8).toString('hex')))
+  var dir = path.join(tmpdir(), randomBytes(8).toString('hex'))
   mkdirp.sync(dir)
   var s = Storage(function (name) {
     return raf(path.join(dir, name))
