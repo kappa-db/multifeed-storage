@@ -13,7 +13,7 @@ require('mkdirp').sync('/tmp/multifeed-storage')
 var s = Storage(function (name) {
   return raf(path.join('/tmp/multifeed-storage', name))
 })
-var feed = s.create('hello')
+var feed = s.createLocal('hello')
 
 s.fromDiscoveryKey(feed.discoveryKey, function (err, key) {
   // key === feed.key
@@ -60,11 +60,25 @@ Find the public key for a string name `localName` as `cb(err, key)`.
 
 `key` is a Buffer like `feed.key`.
 
-# var feed = store.create(localName, opts, cb)
+# var feed = store.createLocal(localName, opts, cb)
 
-Create a hypercore `feed` from an optional `localName`, `opts` (passed to
-hypercore's constructor), and an optional `cb(err)` called after feed metadata
-has been written to internal storage.
+Create a "local" hypercore `feed` from an optional `localName`, `opts` (passed
+to hypercore's constructor), and an optional `cb(err, feed)` called after feed
+metadata has been written to internal storage.
+
+"Local" hypercores are feeds where the secret key is stored locally and the
+local machine may append messages. A new keypair is created when `createLocal()`
+is called.
+
+# var feed = store.createRemote(key, opts, cb)
+
+Create a "remote" hypercore `feed` from a hex string or buffer `key`, `opts`
+(passed to hypercore's constructor), and an optional `cb(err, feed)` called
+after feed metadata has been written to internal storage.
+
+"Remote" hypercores are feeds where the secret key is not stored locally and the
+local machine may not append messages. Use this method to sync a feed created on
+a remote machine.
 
 # var feed = store.get(id, opts)
 

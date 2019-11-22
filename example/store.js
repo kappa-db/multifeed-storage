@@ -6,7 +6,7 @@ require('mkdirp').sync('/tmp/multifeed-storage')
 var s = Storage(function (name) {
   return raf(path.join('/tmp/multifeed-storage', name))
 })
-var feed = s.create('hello')
+var feed = s.createLocal('hello')
 
 s.fromDiscoveryKey(feed.discoveryKey, function (err, key) {
   // key === feed.key

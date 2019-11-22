@@ -7,10 +7,10 @@ var tmpdir = require('os').tmpdir
 var mkdirp = require('mkdirp')
 var { randomBytes } = require('hypercore-crypto')
 
-test('create without name', function (t) {
+test('create local without name', function (t) {
   t.plan(2)
   var s = Storage(ram)
-  var feed = s.create()
+  var feed = s.createLocal()
   feed.ready(function () {
     s.fromDiscoveryKey(feed.discoveryKey, function (err, key) {
       t.ifError(err)
@@ -19,10 +19,10 @@ test('create without name', function (t) {
   })
 })
 
-test('create with name', function (t) {
+test('create local with name', function (t) {
   t.plan(4)
   var s = Storage(ram)
-  var feed = s.create('cool')
+  var feed = s.createLocal('cool')
   feed.ready(function () {
     s.fromDiscoveryKey(feed.discoveryKey, function (err, key) {
       t.ifError(err)
@@ -35,14 +35,14 @@ test('create with name', function (t) {
   })
 })
 
-test('create and get', function (t) {
+test('create local and get', function (t) {
   t.plan(4)
   var dir = path.join(tmpdir(), String(randomBytes(8).toString('hex')))
   mkdirp.sync(dir)
   var s = Storage(function (name) {
     return raf(path.join(dir, name))
   })
-  var feed0 = s.create()
+  var feed0 = s.createLocal()
   feed0.ready(function () {
     feed0.append('hi', function (err) {
       t.ifError(err)
@@ -58,14 +58,14 @@ test('create and get', function (t) {
   })
 })
 
-test('create and get from name', function (t) {
+test('create local and get from name', function (t) {
   t.plan(6)
   var dir = path.join(tmpdir(), String(randomBytes(8).toString('hex')))
   mkdirp.sync(dir)
   var s = Storage(function (name) {
     return raf(path.join(dir, name))
   })
-  var feed0 = s.create('wow')
+  var feed0 = s.createLocal('wow')
   feed0.ready(function () {
     feed0.append('hi', function (err) {
       t.ifError(err)

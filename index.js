@@ -5,9 +5,10 @@ var TinyBox = require('tinybox')
 var path = require('path')
 var LRU = require('lru')
 var { nextTick } = process
-var DKEY = 'd!' // hex discovery key  to key
-var LKEY = 'l!' // hex key to local name
+var DKEY = 'd!' // hex discovery key to key
+var LKEY = 'l!' // local name to hex key
 var INV_LKEY = 'L!' // local name to key
+var KEY = 'k!' // hex key to empty payload
 var FEED = 'f_'
 
 function Storage (storage, opts) {
@@ -52,7 +53,7 @@ Storage.prototype.fromLocalName = function (localname, cb) {
 }
 
 // Create a new hypercore, which can include a local name. (creates + loads)
-Storage.prototype.create = function (localname, opts, cb) {
+Storage.prototype.createLocal = function (localname, opts, cb) {
   var self = this
   if (typeof localname === 'object') {
     cb = opts
@@ -85,9 +86,42 @@ Storage.prototype.create = function (localname, opts, cb) {
     self._db.put(INV_LKEY + localname, key)
   }
   self._db.put(DKEY + hdkey, key)
+  self._db.put(KEY + hkey, Buffer.alloc(0))
   self._db.flush(function (err) {
     if (err) cb(err)
-    else cb(null, self._storageF(FEED + hkey))
+    else cb(null, feed)
+  })
+  return feed
+}
+
+// Create a new hypercore, which can include a local name. (creates + loads)
+Storage.prototype.createRemote = function (key, opts, cb) {
+  var self = this
+  if (typeof opts === 'function') {
+    cb = opts
+    opts = {}
+  }
+  if (!opts) opts = {}
+  if (!cb) cb = noop
+  var store = self._storageF(FEED + hkey)
+  var hkey = asHexStr(key)
+  key = asBuffer(key)
+  var feed = hypercore(store, key, opts)
+  feed.once('close', function () {
+    delete self._feeds[hkey]
+  })
+  self._feeds[hkey] = feed
+  self._dkeys[hdkey] = key
+  if (localname) {
+    self._lnames[localname] = key
+    self._db.put(LKEY + localname, key)
+    self._db.put(INV_LKEY + localname, key)
+  }
+  self._db.put(DKEY + hdkey, key)
+  self._db.put(KEY + hkey, Buffer.alloc(0))
+  self._db.flush(function (err) {
+    if (err) cb(err)
+    else cb(null, feed)
   })
   return feed
 }
@@ -156,6 +190,15 @@ Storage.prototype.get = function (id, opts) {
   }
 }
 
+// Whether a hypercore is stored on disk or in memory
+Storage.prototype.has = function (key, cb) {
+  if (this.isOpen(key)) return nextTick(cb, null, true)
+  this._db.get(KEY + key, function (err, node) {
+    if (err) cb(err)
+    else cb(null, Boolean(node))
+  })
+}
+
 // Returns boolean true/false if core is open.
 Storage.prototype.isOpen = function (id, cb) {
   return this._feeds.hasOwnProperty(asHexStr(id))
@@ -195,14 +238,15 @@ Storage.prototype.closeAll = function (cb) {
 
 // Unload (if necessary) and delete a hypercore.
 Storage.prototype.delete = function (id, cb) {
+  var self = this
   var hkey = asHexStr(id)
-  if (this._feeds.hasOwnProperty(hkey)) {
-    this._feeds[hkey].close(function (err) {
+  if (self._feeds.hasOwnProperty(hkey)) {
+    self._feeds[hkey].close(function (err) {
       if (err) return cb(err)
       self._delete(FEED + hkey, cb)
     })
   }
-  delete this._feeds[hkey]
+  delete self._feeds[hkey]
 }
 
 module.exports = Storage
