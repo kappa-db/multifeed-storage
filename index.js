@@ -214,6 +214,38 @@ Storage.prototype.has = function (key, cb) {
   })
 }
 
+// Load a feed from a key or create the feed as a remote if it doesn't exist
+Storage.prototype.getOrCreateRemote = function (key, opts, cb) {
+  var self = this
+  if (typeof opts === 'function') {
+    cb = opts
+    opts = {}
+  }
+  if (!opts) opts = {}
+  if (!cb) cb = noop
+  self.has(key, function (err, has) {
+    if (err) return cb(err)
+    if (has) self.get(key, opts, cb)
+    else self.createRemote(key, opts, cb)
+  })
+}
+
+// Load a feed from a localname or create the feed as a local if it doesn't exist
+Storage.prototype.getOrCreateLocal = function (localname, opts, cb) {
+  var self = this
+  if (typeof opts === 'function') {
+    cb = opts
+    opts = {}
+  }
+  if (!opts) opts = {}
+  if (!cb) cb = noop
+  self.has(key, function (err, has) {
+    if (err) return cb(err)
+    if (has) self.get(localname, opts, cb)
+    else self.createLocal(localname, opts, cb)
+  })
+}
+
 // Returns boolean true/false if core is open.
 Storage.prototype.isOpen = function (key, cb) {
   return this._feeds.hasOwnProperty(asHexStr(key))
