@@ -87,10 +87,15 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
   }
   self._db.put(DKEY + hdkey, key)
   self._db.put(KEY + hkey, Buffer.alloc(0))
+  var pending = 3
   self._db.flush(function (err) {
     if (err) cb(err)
-    else cb(null, feed)
+    else if (--pending === 0) cb(null, feed)
   })
+  feed.ready(function () {
+    if (--pending === 0) cb(null, feed)
+  })
+  if (--pending === 0) cb(null, feed)
   return feed
 }
 
@@ -103,26 +108,33 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   }
   if (!opts) opts = {}
   if (!cb) cb = noop
-  var store = self._storageF(FEED + hkey)
   var hkey = asHexStr(key)
   key = asBuffer(key)
+  var dkey = hcrypto.discoveryKey(key)
+  var hdkey = asHexStr(dkey)
+  var store = self._storageF(FEED + hkey)
   var feed = hypercore(store, key, opts)
   feed.once('close', function () {
     delete self._feeds[hkey]
   })
   self._feeds[hkey] = feed
   self._dkeys[hdkey] = key
-  if (localname) {
-    self._lnames[localname] = key
-    self._db.put(LKEY + localname, key)
-    self._db.put(INV_LKEY + localname, key)
+  if (opts.localname) {
+    self._lnames[opts.localname] = key
+    self._db.put(LKEY + opts.localname, key)
+    self._db.put(INV_LKEY + opts.localname, key)
   }
   self._db.put(DKEY + hdkey, key)
   self._db.put(KEY + hkey, Buffer.alloc(0))
+  var pending = 3
   self._db.flush(function (err) {
     if (err) cb(err)
     else cb(null, feed)
   })
+  feed.ready(function () {
+    if (--pending === 0) cb(null, feed)
+  })
+  if (--pending === 0) cb(null, feed)
   return feed
 }
 

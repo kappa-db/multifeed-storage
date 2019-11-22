@@ -64,7 +64,7 @@ Find the public key for a string name `localName` as `cb(err, key)`.
 
 Create a "local" hypercore `feed` from an optional `localName`, `opts` (passed
 to hypercore's constructor), and an optional `cb(err, feed)` called after feed
-metadata has been written to internal storage.
+metadata has been written to internal storage and the feed is ready.
 
 "Local" hypercores are feeds where the secret key is stored locally and the
 local machine may append messages. A new keypair is created when `createLocal()`
@@ -74,7 +74,7 @@ is called.
 
 Create a "remote" hypercore `feed` from a hex string or buffer `key`, `opts`
 (passed to hypercore's constructor), and an optional `cb(err, feed)` called
-after feed metadata has been written to internal storage.
+after feed metadata has been written to internal storage and the feed is ready.
 
 "Remote" hypercores are feeds where the secret key is not stored locally and the
 local machine may not append messages. Use this method to sync a feed created on
