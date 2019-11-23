@@ -239,7 +239,7 @@ Storage.prototype.getOrCreateLocal = function (localname, opts, cb) {
   }
   if (!opts) opts = {}
   if (!cb) cb = noop
-  self.has(key, function (err, has) {
+  self.has(localname, function (err, has) {
     if (err) return cb(err)
     if (has) self.get(localname, opts, cb)
     else self.createLocal(localname, opts, cb)
