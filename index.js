@@ -83,16 +83,18 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
   })
   self._feeds[hkey] = feed
   self._dkeys[hdkey] = key
+  var pending = 5
   if (localname) {
     self._lnames[localname] = key
-    self._db.put(LKEY + localname, key)
-    self._db.put(INV_LKEY + localname, key)
+    pending += 2
+    self._db.put(LKEY + localname, key, onput)
+    self._db.put(INV_LKEY + localname, key, onput)
   }
-  self._db.put(DKEY + hdkey, key)
-  self._db.put(KEY + hkey, Buffer.alloc(0))
-  var pending = 3
+  self._db.put(DKEY + hdkey, key, onput)
+  self._db.put(KEY + hkey, Buffer.alloc(0), onput)
+
   self._db.flush(function (err) {
-    if (err) cb(err)
+    if (err) error(err)
     else if (--pending === 0) cb(null, feed)
   })
   feed.ready(function () {
@@ -100,6 +102,14 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
   })
   if (--pending === 0) cb(null, feed)
   return feed
+  function onput (err) {
+    if (err) error(err)
+    else if (--pending === 0) cb(null, feed)
+  }
+  function error (err) {
+    cb(err)
+    cb = noop
+  }
 }
 
 // Create a new hypercore, which can include a local name. (creates + loads)
@@ -122,16 +132,17 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   })
   self._feeds[hkey] = feed
   self._dkeys[hdkey] = key
+  var pending = 5
   if (opts.localname) {
     self._lnames[opts.localname] = key
-    self._db.put(LKEY + opts.localname, key)
-    self._db.put(INV_LKEY + opts.localname, key)
+    pending += 2
+    self._db.put(LKEY + opts.localname, key, onput)
+    self._db.put(INV_LKEY + opts.localname, key, onput)
   }
-  self._db.put(DKEY + hdkey, key)
-  self._db.put(KEY + hkey, Buffer.alloc(0))
-  var pending = 3
+  self._db.put(DKEY + hdkey, key, onput)
+  self._db.put(KEY + hkey, Buffer.alloc(0), onput)
   self._db.flush(function (err) {
-    if (err) cb(err)
+    if (err) error(err)
     else cb(null, feed)
   })
   feed.ready(function () {
@@ -139,6 +150,14 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   })
   if (--pending === 0) cb(null, feed)
   return feed
+  function onput (err) {
+    if (err) error(err)
+    else if (--pending === 0) cb(null, feed)
+  }
+  function error (err) {
+    cb(err)
+    cb = noop
+  }
 }
 
 // Get an existing hypercore by key or local name. Local names are purely local
