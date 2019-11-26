@@ -14,7 +14,7 @@ var FEED = 'f_'
 function Storage (storage, opts) {
   if (!(this instanceof Storage)) return new Storage(storage, opts)
   if (!opts) opts = {}
-  this._db = new TinyBox(storage('db'))
+  this._db = new TinyBox(storage('_mstore_db'))
   this._storage = storage
   this._feeds = {} // map hypercore keys to feeds
   this._dkeys = {} // map discovery key to key for loaded feeds
