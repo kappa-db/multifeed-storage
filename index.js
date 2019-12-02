@@ -162,27 +162,31 @@ Storage.prototype.createRemote = function (key, opts, cb) {
 
 // Get an existing hypercore by key or local name. Local names are purely local
 // & aren't shared over the network. Loads the core if it isn't loaded.
-Storage.prototype.get = function (id, opts) {
+Storage.prototype.get = function (id, opts, cb) {
   var self = this
+  if (typeof opts === 'function') {
+    cb = opts
+    opts = {}
+  }
+  var feed = null
   if (self._feeds.hasOwnProperty(id)) {
     // cached
-    return self._feeds[id]
+    feed = self._feeds[id]
   } else if (Buffer.isBuffer(id) && id.length === 32) {
     // buffer key
     var hkey = asHexStr(id)
     if (self._feeds.hasOwnProperty(hkey)) {
       // cached
-      return self._feeds[hkey]
+      feed = self._feeds[hkey]
     } else {
       // not cached
       var store = self._storageF(FEED + hkey)
-      var feed = self._feeds[hkey] = hypercore(store, key, opts)
+      feed = self._feeds[hkey] = hypercore(store, key, opts)
       feed.once('close', function () {
         delete self._feeds[hkey]
       })
       var hdkey = hcrypto.discoveryKey(id)
       self._dkeys[hdkey] = key
-      return feed
     }
   } else if (/^[0-9A-Fa-f]{64}$/.test(id)) {
     // string key
@@ -190,17 +194,16 @@ Storage.prototype.get = function (id, opts) {
     var store = self._storageF(FEED + id)
     var hdkey = hcrypto.discoveryKey(key)
     self._dkeys[hdkey] = key
-    var feed = self._feeds[id] = hypercore(store, key, opts)
+    feed = self._feeds[id] = hypercore(store, key, opts)
     feed.once('close', function () {
       delete self._feeds[hkey]
     })
-    return feed
   } else if (self._lnames.hasOwnProperty(id)) {
     // cached local name
-    return self._feeds[asHexStr(self._lnames[id])]
+    feed = self._feeds[asHexStr(self._lnames[id])]
   } else {
     // not cached local name
-    var feed = hypercore(deferred(function (cb) {
+    feed = hypercore(deferred(function (cb) {
       self.fromLocalName(id, function (err, key) {
         if (err) return cb(err)
         if (key) {
@@ -220,8 +223,13 @@ Storage.prototype.get = function (id, opts) {
     feed.once('close', function () {
       delete self._feeds[hkey]
     })
-    return feed
   }
+  if (typeof cb === 'function') {
+    feed.ready(function () {
+      cb(null, feed)
+    })
+  }
+  return feed
 }
 
 // Whether a hypercore is stored on disk or in memory
@@ -244,8 +252,12 @@ Storage.prototype.getOrCreateRemote = function (key, opts, cb) {
   if (!cb) cb = noop
   self.has(key, function (err, has) {
     if (err) return cb(err)
-    if (has) self.get(key, opts, cb)
-    else self.createRemote(key, opts, cb)
+    if (has) {
+      var feed = self.get(key, opts)
+      feed.ready(function () {
+        cb(null, feed)
+      })
+    } else self.createRemote(key, opts, cb)
   })
 }
 
@@ -260,8 +272,12 @@ Storage.prototype.getOrCreateLocal = function (localname, opts, cb) {
   if (!cb) cb = noop
   self.has(localname, function (err, has) {
     if (err) return cb(err)
-    if (has) self.get(localname, opts, cb)
-    else self.createLocal(localname, opts, cb)
+    if (has) {
+      var feed = self.get(localname, opts)
+      feed.ready(function () {
+        cb(null, feed)
+      })
+    } else self.createLocal(localname, opts, cb)
   })
 }
 
