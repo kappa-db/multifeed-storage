@@ -93,6 +93,11 @@ been created with different hypercore options than the `opts` you specify.
 Determine whether the store has a feed with `key` as `cb(err, hasFeed)` for a
 boolean `hasFeed`.
 
+# store.hasLocal(localname, cb)
+
+Determine whether the store has a feed with a `localname` as `cb(err, hasFeed)`
+for a boolean `hasFeed`.
+
 # store.getOrCreateRemote(key, opts, cb)
 
 Load a feed as `cb(err, feed)` from a key or if the key doesn't exist, create it

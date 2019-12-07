@@ -203,23 +203,25 @@ Storage.prototype.get = function (id, opts, cb) {
     feed = self._feeds[asHexStr(self._lnames[id])]
   } else {
     // not cached local name
-    feed = hypercore(deferred(function (cb) {
-      self.fromLocalName(id, function (err, key) {
-        if (err) return cb(err)
-        if (key) {
-          // exists
-          self._lnames[id] = key
-          var hkey = asHexStr(key)
-          var hdkey = hcrypto.discoveryKey(key)
-          self._dkeys[hdkey] = key
-          self._feeds[hkey] = feed
-          cb(null, self._storageF(FEED + hkey))
-        } else {
-          // does not exist
-          cb(new Error('feed not found'))
-        }
+    feed = hypercore(function (name) {
+      return deferred(function (cb) {
+        self.fromLocalName(id, function (err, key) {
+          if (err) return cb(err)
+          if (key) {
+            // exists
+            self._lnames[id] = key
+            var hkey = asHexStr(key)
+            var hdkey = hcrypto.discoveryKey(key)
+            self._dkeys[hdkey] = key
+            self._feeds[hkey] = feed
+            cb(null, self._storage(path.join(FEED + hkey, name)))
+          } else {
+            // does not exist
+            cb(new Error('feed not found'))
+          }
+        })
       })
-    }), opts)
+    }, opts)
     feed.once('close', function () {
       delete self._feeds[hkey]
     })
@@ -236,6 +238,15 @@ Storage.prototype.get = function (id, opts, cb) {
 Storage.prototype.has = function (key, cb) {
   if (this.isOpen(key)) return nextTick(cb, null, true)
   this._db.get(KEY + key, function (err, node) {
+    if (err) cb(err)
+    else cb(null, Boolean(node))
+  })
+}
+
+// Whether a locally named hypercore is stored on disk or in memory
+Storage.prototype.hasLocal = function (localname, cb) {
+  if (this._lnames.hasOwnProperty(localname)) return nextTick(cb, null, true)
+  this._db.get(LKEY + localname, function (err, node) {
     if (err) cb(err)
     else cb(null, Boolean(node))
   })
@@ -270,7 +281,7 @@ Storage.prototype.getOrCreateLocal = function (localname, opts, cb) {
   }
   if (!opts) opts = {}
   if (!cb) cb = noop
-  self.has(localname, function (err, has) {
+  self.hasLocal(localname, function (err, has) {
     if (err) return cb(err)
     if (has) {
       var feed = self.get(localname, opts)
