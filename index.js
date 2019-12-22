@@ -1,6 +1,5 @@
 var hypercore = require('hypercore')
 var hcrypto = require('hypercore-crypto')
-var deferred = require('deferred-random-access')
 var TinyBox = require('tinybox')
 var path = require('path')
 var LRU = require('lru')
@@ -101,7 +100,6 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
     if (--pending === 0) cb(null, feed)
   })
   if (--pending === 0) cb(null, feed)
-  return feed
   function onput (err) {
     if (err) error(err)
     else if (--pending === 0) cb(null, feed)
@@ -149,7 +147,6 @@ Storage.prototype.createRemote = function (key, opts, cb) {
     if (--pending === 0) cb(null, feed)
   })
   if (--pending === 0) cb(null, feed)
-  return feed
   function onput (err) {
     if (err) error(err)
     else if (--pending === 0) cb(null, feed)
@@ -168,70 +165,50 @@ Storage.prototype.get = function (id, opts, cb) {
     cb = opts
     opts = {}
   }
-  var feed = null
-  if (self._feeds.hasOwnProperty(id)) {
-    // cached
-    feed = self._feeds[id]
-  } else if (Buffer.isBuffer(id) && id.length === 32) {
-    // buffer key
-    var hkey = asHexStr(id)
-    if (self._feeds.hasOwnProperty(hkey)) {
-      // cached
-      feed = self._feeds[hkey]
-    } else {
-      // not cached
-      var store = self._storageF(FEED + hkey)
-      feed = self._feeds[hkey] = hypercore(store, key, opts)
+  if (!cb) cb = noop
+  var key = asBuffer(id)
+  var hkey = asHexStr(id)
+  if (self._feeds.hasOwnProperty(hkey)) {
+    // hex or buffer key cached
+    ready(key, hkey, self._feeds[hkey])
+  } else if (/^[0-9A-Fa-f]{64}$/.test(hkey)) {
+    // hex or buffer key not cached
+    var store = self._storageF(FEED + hkey)
+    ready(key, hkey, hypercore(store, key, opts))
+  } else if (self._lnames.hasOwnProperty(id)) {
+    // local name cached
+    key = self._lnames[id]
+    hkey = asHexStr(key)
+    ready(key, hkey, self._feeds[hkey])
+  } else {
+    // local name not cached
+    self.fromLocalName(id, function (err, key) {
+      if (err) return cb(err)
+      if (key) {
+        // exists
+        self._lnames[id] = key
+        var hkey = asHexStr(key)
+        var store = self._storageF(FEED + hkey)
+        ready(key, hkey, hypercore(store, key, opts))
+      } else {
+        // does not exist
+        cb(new Error('feed not found'))
+      }
+    })
+  }
+  function ready (key, hkey, feed) {
+    if (!self._feeds.hasOwnProperty(hkey)) {
+      self._feeds[hkey] = feed
+      var hdkey = hcrypto.discoveryKey(key)
+      self._dkeys[hdkey] = key
       feed.once('close', function () {
         delete self._feeds[hkey]
       })
-      var hdkey = hcrypto.discoveryKey(id)
-      self._dkeys[hdkey] = key
     }
-  } else if (/^[0-9A-Fa-f]{64}$/.test(id)) {
-    // string key
-    var key = asBuffer(id)
-    var store = self._storageF(FEED + id)
-    var hdkey = hcrypto.discoveryKey(key)
-    self._dkeys[hdkey] = key
-    feed = self._feeds[id] = hypercore(store, key, opts)
-    feed.once('close', function () {
-      delete self._feeds[hkey]
-    })
-  } else if (self._lnames.hasOwnProperty(id)) {
-    // cached local name
-    feed = self._feeds[asHexStr(self._lnames[id])]
-  } else {
-    // not cached local name
-    feed = hypercore(function (name) {
-      return deferred(function (cb) {
-        self.fromLocalName(id, function (err, key) {
-          if (err) return cb(err)
-          if (key) {
-            // exists
-            self._lnames[id] = key
-            var hkey = asHexStr(key)
-            var hdkey = hcrypto.discoveryKey(key)
-            self._dkeys[hdkey] = key
-            self._feeds[hkey] = feed
-            cb(null, self._storage(path.join(FEED + hkey, name)))
-          } else {
-            // does not exist
-            cb(new Error('feed not found'))
-          }
-        })
-      })
-    }, opts)
-    feed.once('close', function () {
-      delete self._feeds[hkey]
-    })
-  }
-  if (typeof cb === 'function') {
     feed.ready(function () {
       cb(null, feed)
     })
   }
-  return feed
 }
 
 // Whether a hypercore is stored on disk or in memory
@@ -264,10 +241,7 @@ Storage.prototype.getOrCreateRemote = function (key, opts, cb) {
   self.has(key, function (err, has) {
     if (err) return cb(err)
     if (has) {
-      var feed = self.get(key, opts)
-      feed.ready(function () {
-        cb(null, feed)
-      })
+      self.get(key, opts, cb)
     } else self.createRemote(key, opts, cb)
   })
 }
@@ -284,10 +258,7 @@ Storage.prototype.getOrCreateLocal = function (localname, opts, cb) {
   self.hasLocal(localname, function (err, has) {
     if (err) return cb(err)
     if (has) {
-      var feed = self.get(localname, opts)
-      feed.ready(function () {
-        cb(null, feed)
-      })
+      self.get(localname, opts, cb)
     } else self.createLocal(localname, opts, cb)
   })
 }

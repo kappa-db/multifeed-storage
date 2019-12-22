@@ -60,30 +60,31 @@ Find the public key for a string name `localName` as `cb(err, key)`.
 
 `key` is a Buffer like `feed.key`.
 
-# var feed = store.createLocal(localName, opts, cb)
+# store.createLocal(localName, opts, cb)
 
 Create a "local" hypercore `feed` from an optional `localName`, `opts` (passed
-to hypercore's constructor), and an optional `cb(err, feed)` called after feed
-metadata has been written to internal storage and the feed is ready.
+to hypercore's constructor), as `cb(err, feed)` called after feed metadata has
+been written to internal storage and the feed is ready.
 
 "Local" hypercores are feeds where the secret key is stored locally and the
 local machine may append messages. A new keypair is created when `createLocal()`
 is called.
 
-# var feed = store.createRemote(key, opts, cb)
+# store.createRemote(key, opts, cb)
 
 Create a "remote" hypercore `feed` from a hex string or buffer `key`, `opts`
-(passed to hypercore's constructor), and an optional `cb(err, feed)` called
-after feed metadata has been written to internal storage and the feed is ready.
+(passed to hypercore's constructor), as `cb(err, feed)` called after feed
+metadata has been written to internal storage and the feed is ready.
 
 "Remote" hypercores are feeds where the secret key is not stored locally and the
 local machine may not append messages. Use this method to sync a feed created on
 a remote machine.
 
-# var feed = store.get(id, opts)
+# store.get(id, opts, cb)
 
 Load a hypercore by its `id`: either a 32-byte buffer or hex string or a local
-name string. `opts` are passed along to the hypercore constructor.
+name string as `cb(err, feed)`.
+`opts` are passed along to the hypercore constructor.
 
 If this feed is already open, you will get the opened instance, which may have
 been created with different hypercore options than the `opts` you specify.

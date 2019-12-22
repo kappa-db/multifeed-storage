@@ -48,7 +48,7 @@ test('create local without a name and sync to a remote without a name', function
 })
 
 test('create local with a name and sync to a remote with a different name', function (t) {
-  t.plan(6)
+  t.plan(8)
   var sA = Storage(ram)
   var sB = Storage(ram)
   sA.createLocal('x', function (err, feedA) {
@@ -57,9 +57,17 @@ test('create local with a name and sync to a remote with a different name', func
       t.ifError(err)
       sB.createRemote(feedA.key, { localname: 'y' }, function (err, feedB) {
         t.ifError(err)
-        var feedB2 = sB.get('y')
-        var feedA2 = sA.get('x')
-        sync(feedA2, feedB2)
+        var feedA2, feedB2, pending = 2
+        sB.get('y', function (err, feed) {
+          t.ifError(err)
+          feedB2 = feed
+          if (--pending === 0) sync(feedA2, feedB2)
+        })
+        sA.get('x', function (err, feed) {
+          t.ifError(err)
+          feedA2 = feed
+          if (--pending === 0) sync(feedA2, feedB2)
+        })
       })
     })
   })
