@@ -1,6 +1,6 @@
 {
-  "name": "corestorage",
-  "version": "0.0.0",
+  "name": "multifeed-storage",
+  "version": "1.0.0",
   "description": "storage, opening, and closing of a set of hypercores",
   "main": "index.js",
   "scripts": {
