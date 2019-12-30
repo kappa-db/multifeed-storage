@@ -70,6 +70,8 @@ been written to internal storage and the feed is ready.
 local machine may append messages. A new keypair is created when `createLocal()`
 is called.
 
+Emits the `'create-local'` event with the feed.
+
 # store.createRemote(key, opts, cb)
 
 Create a "remote" hypercore `feed` from a hex string or buffer `key`, `opts`
@@ -80,6 +82,8 @@ metadata has been written to internal storage and the feed is ready.
 local machine may not append messages. Use this method to sync a feed created on
 a remote machine.
 
+Emits the `'create-remote'` event with the feed.
+
 # store.get(id, opts, cb)
 
 Load a hypercore by its `id`: either a 32-byte buffer or hex string or a local
@@ -88,6 +92,8 @@ name string as `cb(err, feed)`.
 
 If this feed is already open, you will get the opened instance, which may have
 been created with different hypercore options than the `opts` you specify.
+
+If a feed is opened (not cached), the `'open'` event will fire with the feed.
 
 # store.has(key, cb)
 
@@ -104,10 +110,14 @@ for a boolean `hasFeed`.
 Load a feed as `cb(err, feed)` from a key or if the key doesn't exist, create it
 as a "remote" feed (see the createRemote api docs for more info).
 
+An `'open'` or `'create-remote'` event may be fired.
+
 # store.getOrCreateLocal(localName, opts, cb)
 
 Load a feed as `cb(err, feed)` from a key or if the key doesn't exist, create it
 as a "local" feed (see the createLocal api docs for more info).
+
+An `'open'` or `'create-local'` event may be fired.
 
 # store.isOpen(key)
 
@@ -117,9 +127,13 @@ Return a boolean: whether the feed identified by `key` is open or not.
 
 Close the feed with `key`.
 
+Emits the `'close'` event with the feed.
+
 # store.closeAll(cb)
 
 Close all open feeds.
+
+Emits the `'close'` event for each open feed.
 
 # store.delete(key, cb)
 
@@ -128,3 +142,24 @@ Close and delete all files associated with the feed `key`.
 For this to work you must specify an `opts.delete` implementation to the
 constructor.
 
+Emits the `'delete'` event with the feed key as a `Buffer`.
+
+# store.on('create-local', function (feed) {})
+
+Emitted when a new local feed is created.
+
+# store.on('create-remote', function (feed) {})
+
+Emitted when a new remote feed is created.
+
+# store.on('open', function (feed) {})
+
+Emitted when a feed is opened that was not already cached.
+
+# store.on('close', function (feed) {})
+
+Emitted when an open feed is closed.
+
+# store.on('delete', function (key) {})
+
+Emitted when a feed is deleted with the feed `key` (`Buffer`).
