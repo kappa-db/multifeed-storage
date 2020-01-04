@@ -198,8 +198,12 @@ Storage.prototype.get = function (id, opts, cb) {
     // local name not cached
     self.fromLocalName(id, function (err, key) {
       if (err) return cb(err)
-      if (key) {
-        // exists
+      var hkey = key ? key.toString('hex') : null
+      if (key && self._feeds.hasOwnProperty(hkey)) {
+        // exists, loaded
+        ready(key, hkey, self._feeds[hkey])
+      } else if (key) {
+        // exists, not loaded
         self._lnames[id] = key
         var hkey = asHexStr(key)
         var store = self._storageF(FEED + hkey)
