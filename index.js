@@ -231,7 +231,7 @@ Storage.prototype.get = function (id, opts, cb) {
 // Whether a hypercore is stored on disk or in memory
 Storage.prototype.has = function (key, cb) {
   if (this.isOpen(key)) return nextTick(cb, null, true)
-  this._db.get(KEY + key, function (err, node) {
+  this._db.get(KEY + asHexStr(key), function (err, node) {
     if (err) cb(err)
     else cb(null, Boolean(node))
   })
