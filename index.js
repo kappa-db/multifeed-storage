@@ -2,6 +2,7 @@ var hypercore = require('hypercore')
 var hcrypto = require('hypercore-crypto')
 var TinyBox = require('tinybox')
 var path = require('path')
+var { EventEmitter } = require('events')
 var LRU = require('lru')
 var { nextTick } = process
 var DKEY = 'd!' // hex discovery key to key
@@ -20,6 +21,7 @@ function Storage (storage, opts) {
   this._lnames = {} // map local names to key for loaded feeds
   this._delete = opts.delete || noop
 }
+Storage.prototype = Object.create(EventEmitter.prototype)
 
 Storage.prototype._storageF = function (prefix) {
   var self = this
@@ -82,7 +84,7 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
   })
   self._feeds[hkey] = feed
   self._dkeys[hdkey] = key
-  var pending = 5
+  var pending = 5, cancelled = false
   if (localname) {
     self._lnames[localname] = key
     pending += 2
@@ -94,19 +96,25 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
 
   self._db.flush(function (err) {
     if (err) error(err)
-    else if (--pending === 0) cb(null, feed)
+    else if (--pending === 0) done()
   })
   feed.ready(function () {
-    if (--pending === 0) cb(null, feed)
+    if (--pending === 0) done()
   })
-  if (--pending === 0) cb(null, feed)
+  if (--pending === 0) done()
   function onput (err) {
     if (err) error(err)
-    else if (--pending === 0) cb(null, feed)
+    else if (--pending === 0) done()
   }
   function error (err) {
+    if (cancelled) return
     cb(err)
-    cb = noop
+    cancelled = true
+  }
+  function done () {
+    if (cancelled) return
+    self.emit('create-local', feed)
+    cb(null, feed)
   }
 }
 
@@ -130,7 +138,7 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   })
   self._feeds[hkey] = feed
   self._dkeys[hdkey] = key
-  var pending = 5
+  var pending = 5, cancelled = false
   if (opts.localname) {
     self._lnames[opts.localname] = key
     pending += 2
@@ -141,19 +149,25 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   self._db.put(KEY + hkey, Buffer.alloc(0), onput)
   self._db.flush(function (err) {
     if (err) error(err)
-    else cb(null, feed)
+    else done()
   })
   feed.ready(function () {
-    if (--pending === 0) cb(null, feed)
+    if (--pending === 0) done()
   })
-  if (--pending === 0) cb(null, feed)
+  if (--pending === 0) done()
   function onput (err) {
     if (err) error(err)
-    else if (--pending === 0) cb(null, feed)
+    else if (--pending === 0) done()
   }
   function error (err) {
+    if (cancelled) return
     cb(err)
-    cb = noop
+    cancelled = true
+  }
+  function done () {
+    if (cancelled) return
+    self.emit('create-remote', feed)
+    cb(null, feed)
   }
 }
 
@@ -184,8 +198,12 @@ Storage.prototype.get = function (id, opts, cb) {
     // local name not cached
     self.fromLocalName(id, function (err, key) {
       if (err) return cb(err)
-      if (key) {
-        // exists
+      var hkey = key ? key.toString('hex') : null
+      if (key && self._feeds.hasOwnProperty(hkey)) {
+        // exists, loaded
+        ready(key, hkey, self._feeds[hkey])
+      } else if (key) {
+        // exists, not loaded
         self._lnames[id] = key
         var hkey = asHexStr(key)
         var store = self._storageF(FEED + hkey)
@@ -197,7 +215,9 @@ Storage.prototype.get = function (id, opts, cb) {
     })
   }
   function ready (key, hkey, feed) {
+    var opened = false
     if (!self._feeds.hasOwnProperty(hkey)) {
+      opened = true
       self._feeds[hkey] = feed
       var hdkey = hcrypto.discoveryKey(key)
       self._dkeys[hdkey] = key
@@ -206,6 +226,7 @@ Storage.prototype.get = function (id, opts, cb) {
       })
     }
     feed.ready(function () {
+      if (opened) self.emit('open', feed)
       cb(null, feed)
     })
   }
@@ -214,7 +235,7 @@ Storage.prototype.get = function (id, opts, cb) {
 // Whether a hypercore is stored on disk or in memory
 Storage.prototype.has = function (key, cb) {
   if (this.isOpen(key)) return nextTick(cb, null, true)
-  this._db.get(KEY + key, function (err, node) {
+  this._db.get(KEY + asHexStr(key), function (err, node) {
     if (err) cb(err)
     else cb(null, Boolean(node))
   })
@@ -274,8 +295,10 @@ Storage.prototype.close = function (key, cb) {
   if (!this._feeds.hasOwnProperty(hkey)) {
     return nextTick(cb, new Error('feed not loaded'))
   }
-  this._feeds[hkey].close(cb)
+  var feed = this._feeds[hkey]
+  feed.close(cb)
   delete this._feeds[hkey]
+  this.emit('close', feed)
 }
 
 // Close all hypercores.
@@ -285,6 +308,10 @@ Storage.prototype.closeAll = function (cb) {
   Object.keys(self._feeds).forEach(function (key) {
     pending++
     self._feeds[key].close(function (err) {
+      if (!err) {
+        self.emit('close', self._feeds[key])
+        delete self._feeds[key]
+      }
       if (!finished && err) {
         finished = true
         cb(err)
@@ -303,24 +330,33 @@ Storage.prototype.closeAll = function (cb) {
 // Unload (if necessary) and delete a hypercore.
 Storage.prototype.delete = function (key, cb) {
   var self = this
+  if (!cb) cb = noop
   var hkey = asHexStr(key)
+  var feed = self._feeds[hkey]
   if (self._feeds.hasOwnProperty(hkey)) {
-    self._feeds[hkey].close(function (err) {
+    feed.close(function (err) {
       if (err) return cb(err)
-      self._delete(FEED + hkey, cb)
+      self.emit('close', feed)
+      self._delete(FEED + hkey, function (err) {
+        if (err) return cb(err)
+        self.emit('delete', feed.key)
+        cb(err)
+      })
+    })
+    delete self._dkeys[asHexStr(feed.discoveryKey)]
+    var bkey = asBuffer(key)
+    Object.keys(self._lnames).forEach(function (key) {
+      if (self._lnames[key].equals(bkey)) {
+        delete self._lnames[key]
+      }
+    })
+    delete self._feeds[hkey]
+  } else {
+    self._delete(FEED + hkey, function (err) {
+      if (err) return cb(err)
+      self.emit('delete', asBuffer(key))
     })
   }
-  var feed = self._feeds[hkey]
-  if (feed) {
-    delete self._dkeys[asHexStr(feed.discoveryKey)]
-  }
-  var bkey = asBuffer(key)
-  Object.keys(self._lnames).forEach(function (key) {
-    if (self._lnames[key].equals(bkey)) {
-      delete self._lnames[key]
-    }
-  })
-  delete self._feeds[hkey]
 }
 
 module.exports = Storage
