@@ -19,6 +19,8 @@ function Storage (storage, opts) {
   this._feeds = {} // map hypercore keys to feeds
   this._dkeys = {} // map discovery key to key for loaded feeds
   this._lnames = {} // map local names to key for loaded feeds
+  this._pendingLocal = {} // map local names to arrays of callbacks
+  this._pendingRemote = {} // map remote keys to arrays of callbacks
   this._delete = opts.delete || noop
 }
 Storage.prototype = Object.create(EventEmitter.prototype)
@@ -71,6 +73,11 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
     opts = {}
   }
   if (!cb) cb = noop
+  if (self._pendingLocal.hasOwnProperty(localname)) {
+    self._pendingLocal[localname].push(cb)
+    return
+  }
+  self._pendingLocal[localname] = []
   var kp = hcrypto.keyPair()
   var key = kp.publicKey
   var hkey = key.toString('hex')
@@ -108,13 +115,23 @@ Storage.prototype.createLocal = function (localname, opts, cb) {
   }
   function error (err) {
     if (cancelled) return
+    var cbs = self._pendingLocal[localname]
+    delete self._pendingLocal[localname]
     cb(err)
     cancelled = true
+    for (var i = 0; i < cbs.length; i++) {
+      cbs[i](err)
+    }
   }
   function done () {
     if (cancelled) return
+    var cbs = self._pendingLocal[localname]
+    delete self._pendingLocal[localname]
     self.emit('create-local', feed)
     cb(null, feed)
+    for (var i = 0; i < cbs.length; i++) {
+      cbs[i](null, feed)
+    }
   }
 }
 
@@ -128,6 +145,11 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   if (!opts) opts = {}
   if (!cb) cb = noop
   var hkey = asHexStr(key)
+  if (self._pendingRemote.hasOwnProperty(hkey)) {
+    self._pendingRemote[hkey].push(cb)
+    return
+  }
+  self._pendingRemote[hkey] = []
   key = asBuffer(key)
   var dkey = hcrypto.discoveryKey(key)
   var hdkey = asHexStr(dkey)
@@ -161,13 +183,23 @@ Storage.prototype.createRemote = function (key, opts, cb) {
   }
   function error (err) {
     if (cancelled) return
+    var cbs = self._pendingRemote[hkey]
+    delete self._pendingRemote[hkey]
     cb(err)
     cancelled = true
+    for (var i = 0; i < cbs.length; i++) {
+      cbs[i](err)
+    }
   }
   function done () {
     if (cancelled) return
+    var cbs = self._pendingRemote[hkey]
+    delete self._pendingRemote[hkey]
     self.emit('create-remote', feed)
     cb(null, feed)
+    for (var i = 0; i < cbs.length; i++) {
+      cbs[i](null, feed)
+    }
   }
 }
 
@@ -259,6 +291,7 @@ Storage.prototype.getOrCreateRemote = function (key, opts, cb) {
   }
   if (!opts) opts = {}
   if (!cb) cb = noop
+  var hkey = asHexStr(key)
   self.has(key, function (err, has) {
     if (err) return cb(err)
     if (has) {
